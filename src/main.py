@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def create_bedrock_model() -> BedrockModel:
     # 로컬 테스트용 키가 있으면 쓰고, 없으면(EC2 환경) 빈 값으로 두어 IAM Role을 사용하게 함
     boto_kwargs = {
-        "region_name": os.environ.get("AWS_REGION", "us-east-1")
+        "region_name": os.environ.get("AWS_REGION", "ap-southeast-2")
     }
     
     if os.environ.get("AWS_ACCESS_KEY_ID") and os.environ.get("AWS_SECRET_ACCESS_KEY"):
@@ -30,7 +30,7 @@ def create_bedrock_model() -> BedrockModel:
     
     return BedrockModel(
         boto_session=session,
-        model_id="anthropic.claude-3-5-sonnet-20241022-v2:0",
+        model_id="anthropic.claude-sonnet-4-6",
     )
 
 
