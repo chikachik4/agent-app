@@ -171,6 +171,59 @@ tests/test_k8s_tools.py::TestDescribePod::test_returns_events_section           
 
 ---
 
+## AWS 실험 환경 구성
+
+### 1. Amazon Bedrock (필수)
+
+AWS 콘솔 → Bedrock → **Model access** 에서 `Claude 3.5 Sonnet` 활성화 (us-east-1 또는 us-west-2)  
+IAM 사용자/역할에 아래 권한을 추가합니다:
+
+```json
+{
+  "Effect": "Allow",
+  "Action": "bedrock:InvokeModel",
+  "Resource": "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-5-sonnet-20241022-v2:0"
+}
+```
+
+### 2. Kubernetes 클러스터 (필수)
+
+**EKS로 최소 클러스터 생성:**
+
+```bash
+eksctl create cluster --name chaos-lab --region us-east-1 --nodes 2 --node-type t3.medium
+aws eks update-kubeconfig --name chaos-lab --region us-east-1
+```
+
+> 실험 후 `eksctl delete cluster --name chaos-lab` 으로 즉시 삭제해 비용을 절감하세요.  
+> 로컬에서 먼저 테스트하려면 [kind](https://kind.sigs.k8s.io/) 또는 [minikube](https://minikube.sigs.k8s.io/)로 대체 가능합니다. (Bedrock 호출만 AWS에 의존)
+
+### 3. Prometheus (선택 — 없으면 Observability Agent 비활성)
+
+**옵션 A — EKS 클러스터 내부 설치 (권장):**
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install prometheus prometheus-community/prometheus -n monitoring --create-namespace
+kubectl port-forward svc/prometheus-server 9090:80 -n monitoring
+```
+
+`.env`에 `PROMETHEUS_URL=http://localhost:9090` 설정 후 사용.
+
+**옵션 B — Amazon Managed Service for Prometheus (AMP):**  
+관리형이라 운영 부담 없음. 별도 쿼리 엔드포인트 설정 필요.
+
+### 최소 구성 비용 (월 기준)
+
+| 서비스 | 용도 | 예상 비용 |
+|---|---|---|
+| Amazon Bedrock | LLM 호출 | 사용량 기반 (실험 수준 ~$1 미만) |
+| EKS 클러스터 | 카오스 실험 대상 | ~$73 |
+| t3.medium × 2 | 워커 노드 | ~$60 |
+| Prometheus (in-cluster) | 메트릭 수집 | 무료 |
+
+---
+
 ## 기술 스택
 
 | 구분 | 기술 |
