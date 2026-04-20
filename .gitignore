@@ -1,0 +1,40 @@
+# 가상환경
+.venv/
+venv/
+env/
+
+# 환경변수 / 시크릿
+.env
+.env.*
+*.pem
+*.key
+kubeconfig
+kubeconfig.*
+
+# Python 캐시
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# 테스트 / 커버리지
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# 빌드 / 배포
+*.egg-info/
+dist/
+build/
+*.whl
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
