@@ -47,7 +47,6 @@ class TestExperimentState:
         state.transition(ExperimentStatus.INJECTING, "before reset")
         state.plan = ExperimentPlan(
             namespace="default", target="nginx", fault_type="pod_delete",
-            service="nginx", deployment_name="nginx",
         )
         state.reset()
         assert state.status == ExperimentStatus.PENDING

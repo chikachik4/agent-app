@@ -70,9 +70,17 @@ class AdminAgent(BaseAgent):
             state_ref.transition(ExperimentStatus.PLANNING, f"입력 명령: {user_command}")
             plan_text = planning_ref.run(user_command)
             try:
-                plan_data = _extract_json(plan_text)
+                raw = _extract_json(plan_text)
+                plan_data = raw["plan"]
+                approval = raw.get("approval", {})
                 state_ref.plan = ExperimentPlan(**plan_data)
-                return f"실험 계획 수립 완료:\n{json.dumps(plan_data, ensure_ascii=False, indent=2)}"
+                risk_level = approval.get("risk_level", "UNKNOWN")
+                summary = approval.get("summary", "")
+                logger.info("[Admin] risk_level=%s summary=%s", risk_level, summary)
+                return (
+                    f"실험 계획 수립 완료:\n{json.dumps(plan_data, ensure_ascii=False, indent=2)}\n\n"
+                    f"[승인 정보] risk_level={risk_level}\n{summary}\n{approval.get('reason', '')}"
+                )
             except Exception as exc:
                 logger.error("plan_experiment parse error: %s", exc)
                 return f"계획 파싱 실패: {exc}\n원본 응답: {plan_text}"

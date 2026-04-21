@@ -20,10 +20,8 @@ class ExperimentPlan:
     namespace: str
     target: str
     fault_type: str
-    service: str
-    deployment_name: str
-    error_threshold_pct: float = 10.0
-    observation_minutes: int = 5
+    duration_sec: int = 30
+    threshold: float = 10.0
 
 
 @dataclass
