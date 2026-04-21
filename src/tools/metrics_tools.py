@@ -84,13 +84,31 @@ def check_metric_threshold(namespace: str, service: str, metric_type: str, thres
     try:
         if metric_type == "error_rate":
             window = "5m"
-            total_q = f'sum(rate(http_requests_total{{namespace="{namespace}",service="{service}"}}[{window}]))'
-            error_q = f'sum(rate(http_requests_total{{namespace="{namespace}",service="{service}",status=~"5.."}}[{window}]))'
-            total_data = _query(total_q)
-            error_data = _query(error_q)
-            total_val = float(total_data["data"]["result"][0]["value"][1]) if total_data["data"]["result"] else 0.0
-            error_val = float(error_data["data"]["result"][0]["value"][1]) if error_data["data"]["result"] else 0.0
-            actual_pct = (error_val / total_val * 100) if total_val > 0 else 0.0
+            _METRIC_CANDIDATES = [
+                "http_requests_total",
+                "istio_requests_total",
+                "nginx_ingress_controller_requests",
+            ]
+            selected_metric = None
+            total_data = None
+            for candidate in _METRIC_CANDIDATES:
+                total_q = f'sum(rate({candidate}{{namespace="{namespace}",service="{service}"}}[{window}]))'
+                data = _query(total_q)
+                if data.get("data", {}).get("result"):
+                    selected_metric = candidate
+                    total_data = data
+                    break
+            if selected_metric is None:
+                actual_pct = 0.0
+            else:
+                error_q = (
+                    f'sum(rate({selected_metric}{{namespace="{namespace}",'
+                    f'service="{service}",status=~"5.."}}[{window}]))'
+                )
+                error_data = _query(error_q)
+                total_val = float(total_data["data"]["result"][0]["value"][1])
+                error_val = float(error_data["data"]["result"][0]["value"][1]) if error_data["data"]["result"] else 0.0
+                actual_pct = (error_val / total_val * 100) if total_val > 0 else 0.0
         elif metric_type == "cpu_usage":
             promql = f'sum(rate(container_cpu_usage_seconds_total{{namespace="{namespace}"}}[5m])) * 100'
             data = _query(promql)

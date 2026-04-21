@@ -7,6 +7,7 @@ from typing import Optional
 class ExperimentStatus(Enum):
     PENDING = "PENDING"
     PLANNING = "PLANNING"
+    PENDING_APPROVAL = "PENDING_APPROVAL"
     DRY_RUN = "DRY_RUN"
     INJECTING = "INJECTING"
     OBSERVING = "OBSERVING"

@@ -31,7 +31,10 @@ class TestKubectlFaultInjector:
 
     @patch("src.tools.chaos_tools.subprocess.run")
     def test_inject_pod_delete_no_matching_pod(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="other-pod-xyz\n", stderr="")
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),           # label selector: no match
+            MagicMock(returncode=0, stdout="other-pod-xyz\n", stderr=""),  # prefix search: no match
+        ]
         with pytest.raises(RuntimeError, match="No pod found starting with"):
             self.injector.inject("default", "nginx-abc", "pod_delete")
 
@@ -122,7 +125,10 @@ class TestInjectPodKill:
 
     @patch("src.tools.chaos_tools.subprocess.run")
     def test_no_matching_pod_returns_error_string(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout="other-pod-xyz\n", stderr="")
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="", stderr=""),           # label selector: no match
+            MagicMock(returncode=0, stdout="other-pod-xyz\n", stderr=""),  # prefix search: no match
+        ]
         result = inject_pod_kill._tool_func(namespace="default", target_pod="nginx-abc")
         assert "Error" in result
         assert "No pod found" in result

@@ -116,9 +116,26 @@ class ChaosMeshFaultInjector:
 # ── 팩토리 함수 ───────────────────────────────────────────────────────────────
 
 def _find_pod_by_prefix(namespace: str, prefix: str) -> str:
-    """네임스페이스에서 prefix로 시작하는 첫 번째 실제 Pod 이름을 반환합니다."""
+    """네임스페이스에서 Running 상태의 Pod를 반환합니다. 레이블 셀렉터를 우선 시도하고 실패 시 prefix 매칭으로 폴백합니다."""
+    label_result = subprocess.run(
+        [
+            "kubectl", "get", "pods", "-n", namespace, "-l", f"app={prefix}",
+            "--field-selector=status.phase=Running", "--no-headers",
+            "-o", "custom-columns=:metadata.name",
+        ],
+        capture_output=True, text=True, timeout=30,
+    )
+    if label_result.returncode == 0:
+        pods = [line.strip() for line in label_result.stdout.splitlines() if line.strip()]
+        if pods:
+            return pods[0]
+
     result = subprocess.run(
-        ["kubectl", "get", "pods", "-n", namespace, "--no-headers", "-o", "custom-columns=:metadata.name"],
+        [
+            "kubectl", "get", "pods", "-n", namespace,
+            "--field-selector=status.phase=Running", "--no-headers",
+            "-o", "custom-columns=:metadata.name",
+        ],
         capture_output=True, text=True, timeout=30,
     )
     if result.returncode != 0:

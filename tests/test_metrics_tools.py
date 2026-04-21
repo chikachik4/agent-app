@@ -36,8 +36,8 @@ class TestCheckMetricThreshold:
 
     @patch("src.tools.metrics_tools._query")
     def test_error_rate_zero_total_returns_ok(self, mock_query):
-        # total=0 → division-by-zero guard, actual_pct=0.0
-        mock_query.side_effect = [_make_empty(), _make_empty()]
+        # all 3 metric candidates return empty → no metric found → actual_pct=0.0
+        mock_query.side_effect = [_make_empty(), _make_empty(), _make_empty()]
         result = check_metric_threshold._tool_func(
             namespace="default", service="nginx",
             metric_type="error_rate", threshold_pct=10.0,

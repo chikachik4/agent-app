@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from datetime import datetime
 
 from strands import tool
@@ -42,6 +43,9 @@ class AdminAgent(BaseAgent):
             "당신은 AIOps 오케스트레이터입니다. 카오스 실험을 상태 기반으로 동적 제어합니다.\n\n"
             "워크플로우 (순서대로 실행, 결과에 따라 동적 분기):\n"
             "1. plan_experiment: 자연어 명령 → 구조화된 실험 계획 수립\n"
+            "   - 결과에 '[승인 필요]'가 포함되면 → 사용자 응답을 기다립니다\n"
+            "   - 사용자가 '승인' 또는 긍정 의사를 밝히면 → 2번(dry_run_experiment)부터 진행\n"
+            "   - 사용자가 거부하면 → 실험 중단 후 ABORTED 보고\n"
             "2. dry_run_experiment: 대상 리소스 존재 여부 사전 검증\n"
             "   - 'DRY-RUN FAIL' 포함 시 → 즉시 중단하고 이유를 보고\n"
             "3. run_chaos_experiment: 장애 주입 (abort_on_error_pct로 긴급 중단 기준 설정)\n"
@@ -77,6 +81,17 @@ class AdminAgent(BaseAgent):
                 risk_level = approval.get("risk_level", "UNKNOWN")
                 summary = approval.get("summary", "")
                 logger.info("[Admin] risk_level=%s summary=%s", risk_level, summary)
+                if risk_level in ("HIGH", "CRITICAL"):
+                    state_ref.transition(
+                        ExperimentStatus.PENDING_APPROVAL,
+                        f"위험도 {risk_level} — 사용자 승인 대기",
+                    )
+                    return (
+                        f"실험 계획 수립 완료:\n{json.dumps(plan_data, ensure_ascii=False, indent=2)}\n\n"
+                        f"[승인 필요] risk_level={risk_level}\n{summary}\n{approval.get('reason', '')}\n\n"
+                        "위험도가 높아 사용자의 승인(예/아니오)이 필요합니다. "
+                        "진행하려면 '승인해'라고 입력하세요."
+                    )
                 return (
                     f"실험 계획 수립 완료:\n{json.dumps(plan_data, ensure_ascii=False, indent=2)}\n\n"
                     f"[승인 정보] risk_level={risk_level}\n{summary}\n{approval.get('reason', '')}"
@@ -160,6 +175,12 @@ class AdminAgent(BaseAgent):
                 ExperimentStatus.OBSERVING,
                 f"{namespace}/{service}, threshold={error_threshold_pct}%",
             )
+            logger.info("[Admin] observe_metrics: Prometheus 데이터 수집을 위해 30초간 대기합니다...")
+            state_ref.transition(
+                ExperimentStatus.OBSERVING,
+                "Prometheus 데이터 수집을 위해 30초간 대기합니다...",
+            )
+            time.sleep(30)
             prompt = (
                 f"'{namespace}' 네임스페이스의 '{service}' 서비스에 대해 "
                 f"최근 {time_range_minutes}분간 에러율을 확인하고, "
