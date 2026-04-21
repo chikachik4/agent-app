@@ -94,23 +94,24 @@ pip install -r requirements.txt
 
 ### 환경변수 설정
 
-`.env` 파일을 열어 실제 값을 채웁니다:
+`.env` 파일을 열어 필요한 값을 채웁니다:
 
 ```env
-# AWS Credentials & Region (Bedrock)
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_REGION=us-east-1
+# AWS Credentials (선택 — EC2 IAM Role 환경에서는 불필요)
+# AWS_ACCESS_KEY_ID=your-access-key
+# AWS_SECRET_ACCESS_KEY=your-secret-key
 
-# Kubernetes
-KUBECONFIG=/path/to/kubeconfig
+# Kubernetes (선택 — 미설정 시 ~/.kube/config 자동 사용)
+# KUBECONFIG=/path/to/kubeconfig
 
-# Prometheus
-PROMETHEUS_URL=http://prometheus.monitoring:9090
+# Prometheus (선택 — 미설정 시 Observability Agent 비활성)
+PROMETHEUS_URL=http://localhost:9090
 
 # Chaos Backend: "kubectl" (기본값) 또는 "chaos_mesh"
 CHAOS_BACKEND=kubectl
 ```
+
+> EC2 인스턴스에 IAM Role이 부여되어 있거나 로컬에 `aws configure`가 설정된 경우, AWS 크리덴셜 항목은 비워두어도 됩니다.
 
 ### 실행
 
@@ -188,15 +189,32 @@ IAM 사용자/역할에 아래 권한을 추가합니다:
 
 ### 2. Kubernetes 클러스터 (필수)
 
-**EKS로 최소 클러스터 생성:**
+**옵션 A — EC2 단일 인스턴스 + minikube (권장 테스트 환경):**
+
+IAM Role이 부여된 EC2 인스턴스(t3.medium 이상) 하나로 충분합니다.
+
+```bash
+# minikube 설치 (EC2 Amazon Linux 2023 기준)
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+
+# Docker 드라이버로 시작
+minikube start --driver=docker
+
+# kubeconfig 자동 설정 확인
+kubectl get nodes
+```
+
+> `.env`의 `KUBECONFIG`는 비워두면 minikube가 설정한 `~/.kube/config`를 자동으로 사용합니다.
+
+**옵션 B — EKS 클러스터 (프로덕션 유사 환경):**
 
 ```bash
 eksctl create cluster --name chaos-lab --region us-east-1 --nodes 2 --node-type t3.medium
 aws eks update-kubeconfig --name chaos-lab --region us-east-1
 ```
 
-> 실험 후 `eksctl delete cluster --name chaos-lab` 으로 즉시 삭제해 비용을 절감하세요.  
-> 로컬에서 먼저 테스트하려면 [kind](https://kind.sigs.k8s.io/) 또는 [minikube](https://minikube.sigs.k8s.io/)로 대체 가능합니다. (Bedrock 호출만 AWS에 의존)
+> 실험 후 `eksctl delete cluster --name chaos-lab` 으로 즉시 삭제해 비용을 절감하세요.
 
 ### 3. Prometheus (선택 — 없으면 Observability Agent 비활성)
 
@@ -214,6 +232,16 @@ kubectl port-forward svc/prometheus-server 9090:80 -n monitoring
 관리형이라 운영 부담 없음. 별도 쿼리 엔드포인트 설정 필요.
 
 ### 최소 구성 비용 (월 기준)
+
+**EC2 + minikube (테스트 추천):**
+
+| 서비스 | 용도 | 예상 비용 |
+|---|---|---|
+| Amazon Bedrock | LLM 호출 | 사용량 기반 (실험 수준 ~$1 미만) |
+| EC2 t3.medium × 1 | minikube 호스트 | ~$30 |
+| Prometheus (in-cluster) | 메트릭 수집 | 무료 |
+
+**EKS (프로덕션 유사 환경):**
 
 | 서비스 | 용도 | 예상 비용 |
 |---|---|---|
