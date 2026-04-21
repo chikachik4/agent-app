@@ -22,13 +22,14 @@ class KubectlFaultInjector:
     def inject(self, namespace: str, target: str, fault_type: str, **kwargs: Any) -> str:
         logger.info("kubectl inject: ns=%s target=%s type=%s", namespace, target, fault_type)
         if fault_type == "pod_delete":
+            actual_pod = _find_pod_by_prefix(namespace, target)
             result = subprocess.run(
-                ["kubectl", "delete", "pod", target, "-n", namespace, "--ignore-not-found=true"],
+                ["kubectl", "delete", "pod", actual_pod, "-n", namespace],
                 capture_output=True, text=True, timeout=30,
             )
             if result.returncode != 0:
                 raise RuntimeError(f"kubectl delete failed: {result.stderr}")
-            return f"Pod '{target}' deleted from namespace '{namespace}'. {result.stdout.strip()}"
+            return f"Pod '{actual_pod}' deleted from namespace '{namespace}'. {result.stdout.strip()}"
 
         if fault_type == "network_delay":
             delay_ms = kwargs.get("delay_ms", 500)
@@ -114,6 +115,21 @@ class ChaosMeshFaultInjector:
 
 # ── 팩토리 함수 ───────────────────────────────────────────────────────────────
 
+def _find_pod_by_prefix(namespace: str, prefix: str) -> str:
+    """네임스페이스에서 prefix로 시작하는 첫 번째 실제 Pod 이름을 반환합니다."""
+    result = subprocess.run(
+        ["kubectl", "get", "pods", "-n", namespace, "--no-headers", "-o", "custom-columns=:metadata.name"],
+        capture_output=True, text=True, timeout=30,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"kubectl get pods failed: {result.stderr}")
+    pods = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+    for pod in pods:
+        if pod.startswith(prefix):
+            return pod
+    raise RuntimeError(f"No pod found starting with '{prefix}'")
+
+
 def _get_injector() -> FaultInjector:
     backend = os.environ.get("CHAOS_BACKEND", "kubectl")
     if backend == "chaos_mesh":
@@ -162,13 +178,14 @@ def inject_pod_kill(namespace: str, target_pod: str) -> str:
         target_pod: 삭제할 Pod 이름
     """
     try:
+        actual_pod = _find_pod_by_prefix(namespace, target_pod)
         result = subprocess.run(
-            ["kubectl", "delete", "pod", target_pod, "-n", namespace, "--ignore-not-found=true"],
+            ["kubectl", "delete", "pod", actual_pod, "-n", namespace],
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode != 0:
             raise RuntimeError(f"kubectl delete failed: {result.stderr}")
-        return f"[POD_KILL] Pod '{target_pod}' deleted from namespace '{namespace}'. {result.stdout.strip()}"
+        return f"[POD_KILL] Pod '{actual_pod}' deleted from namespace '{namespace}'. {result.stdout.strip()}"
     except Exception as exc:
         logger.error("inject_pod_kill error: %s", exc)
         return f"Error: {exc}"

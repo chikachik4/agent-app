@@ -19,16 +19,28 @@ class TestKubectlFaultInjector:
 
     @patch("src.tools.chaos_tools.subprocess.run")
     def test_inject_pod_delete_success(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='pod "nginx-abc" deleted', stderr="")
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="nginx-abc-12345-xyxy\n", stderr=""),  # get pods
+            MagicMock(returncode=0, stdout='pod "nginx-abc-12345-xyxy" deleted', stderr=""),  # delete
+        ]
         result = self.injector.inject("default", "nginx-abc", "pod_delete")
         assert "deleted" in result
-        mock_run.assert_called_once()
-        cmd = mock_run.call_args[0][0]
-        assert "delete" in cmd and "nginx-abc" in cmd
+        assert mock_run.call_count == 2
+        delete_cmd = mock_run.call_args_list[1][0][0]
+        assert "delete" in delete_cmd and "nginx-abc-12345-xyxy" in delete_cmd
+
+    @patch("src.tools.chaos_tools.subprocess.run")
+    def test_inject_pod_delete_no_matching_pod(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="other-pod-xyz\n", stderr="")
+        with pytest.raises(RuntimeError, match="No pod found starting with"):
+            self.injector.inject("default", "nginx-abc", "pod_delete")
 
     @patch("src.tools.chaos_tools.subprocess.run")
     def test_inject_pod_delete_failure(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="pod not found")
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="nginx-abc-12345-xyxy\n", stderr=""),  # get pods
+            MagicMock(returncode=1, stdout="", stderr="pod not found"),  # delete fails
+        ]
         with pytest.raises(RuntimeError, match="kubectl delete failed"):
             self.injector.inject("default", "nginx-abc", "pod_delete")
 
@@ -100,14 +112,27 @@ class TestDryRunFault:
 class TestInjectPodKill:
     @patch("src.tools.chaos_tools.subprocess.run")
     def test_success_returns_pod_kill_label(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout='pod "nginx-abc" deleted', stderr="")
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="nginx-abc-12345-xyxy\n", stderr=""),  # get pods
+            MagicMock(returncode=0, stdout='pod "nginx-abc-12345-xyxy" deleted', stderr=""),  # delete
+        ]
         result = inject_pod_kill._tool_func(namespace="default", target_pod="nginx-abc")
         assert "POD_KILL" in result
         assert "deleted" in result
 
     @patch("src.tools.chaos_tools.subprocess.run")
+    def test_no_matching_pod_returns_error_string(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout="other-pod-xyz\n", stderr="")
+        result = inject_pod_kill._tool_func(namespace="default", target_pod="nginx-abc")
+        assert "Error" in result
+        assert "No pod found" in result
+
+    @patch("src.tools.chaos_tools.subprocess.run")
     def test_failure_returns_error_string(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="forbidden")
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="nginx-abc-12345-xyxy\n", stderr=""),  # get pods
+            MagicMock(returncode=1, stdout="", stderr="forbidden"),  # delete fails
+        ]
         result = inject_pod_kill._tool_func(namespace="default", target_pod="nginx-abc")
         assert "Error" in result
 
